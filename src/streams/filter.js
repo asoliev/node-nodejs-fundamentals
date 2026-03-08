@@ -18,16 +18,27 @@ const filter = () => {
 
   const transformStream = new Transform({
     transform(chunk, encoding, callback) {
-      const lines = chunk.toString().split('\n');
+      this._lineBuffer = (this._lineBuffer ?? '') + chunk.toString();
+      const lines = this._lineBuffer.split('\n');
+      if (!this._lineBuffer.endsWith('\n')) {
+        this._lineBuffer = lines.pop() ?? '';
+      } else {
+        this._lineBuffer = '';
+      }
+
       const filtered = lines
         .filter(line => line.includes(pattern))
         .join('\n');
-      
-      if (filtered) {
+
+      if (filtered !== '') {
         this.push(filtered);
-        if (lines[lines.length - 1] !== '') {
-          this.push('\n');
-        }
+        if (!filtered.endsWith('\n')) this.push('\n');
+      }
+      callback();
+    },
+    flush(callback) {
+      if ((this._lineBuffer ?? '') !== '' && this._lineBuffer.includes(pattern)) {
+        this.push(this._lineBuffer);
       }
       callback();
     }

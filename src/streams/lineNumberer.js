@@ -2,10 +2,18 @@ import { Transform } from 'stream';
 
 const lineNumberer = () => {
   let lineNumber = 1;
+  let lineBuffer = '';
 
   const transformStream = new Transform({
     transform(chunk, encoding, callback) {
-      const lines = chunk.toString().split('\n');
+      lineBuffer += chunk.toString();
+      const lines = lineBuffer.split('\n');
+      if (!lineBuffer.endsWith('\n')) {
+        lineBuffer = lines.pop() ?? '';
+      } else {
+        lineBuffer = '';
+      }
+
       const numbered = lines
         .map((line, index) => {
           if (line === '' && index === lines.length - 1) {
@@ -16,8 +24,18 @@ const lineNumberer = () => {
           return result;
         })
         .join('\n');
-      
-      this.push(numbered);
+
+      if (numbered !== '') {
+        this.push(numbered);
+        if (!numbered.endsWith('\n')) this.push('\n');
+      }
+      callback();
+    },
+    flush(callback) {
+      if (lineBuffer !== '') {
+        this.push(`${lineNumber} ${lineBuffer}`);
+        lineNumber++;
+      }
       callback();
     }
   });

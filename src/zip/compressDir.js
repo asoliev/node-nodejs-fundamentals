@@ -39,8 +39,6 @@ const compressDir = async () => {
   collectFiles(sourceDir, sourceDir);
 
   // Create a tar-like format in a transform stream
-  let fileIndex = 0;
-
   const archiveStream = new Transform({
     async transform(chunk, encoding, callback) {
       callback(null, chunk);

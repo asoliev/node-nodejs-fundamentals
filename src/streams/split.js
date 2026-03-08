@@ -24,27 +24,34 @@ const split = async () => {
   let chunkNumber = 1;
   let currentChunk = '';
   let currentLineCount = 0;
+  let lineBuffer = '';
 
   const transformStream = new Transform({
     transform(chunk, encoding, callback) {
-      const lines = chunk.toString().split('\n');
-      
+      lineBuffer += chunk.toString();
+      const lines = lineBuffer.split('\n');
+      // If buffer doesn't end with \n, last element is an incomplete line — keep for next chunk
+      if (!lineBuffer.endsWith('\n')) {
+        lineBuffer = lines.pop() ?? '';
+      } else {
+        lineBuffer = '';
+      }
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         if (currentLineCount > 0 && currentLineCount % linesPerChunk === 0) {
-          // Write current chunk to file
           const fileName = `chunk_${chunkNumber}.txt`;
           const filePath = path.join(outDir, fileName);
           fs.writeFileSync(filePath, currentChunk);
-          
+
           chunkNumber++;
           currentChunk = '';
           currentLineCount = 0;
         }
 
         if (i === lines.length - 1 && line === '') {
-          // Last element is empty (from trailing newline)
+          // Trailing newline produced empty line — don't count as content
           break;
         }
 
@@ -54,11 +61,16 @@ const split = async () => {
         currentChunk += line;
         currentLineCount++;
       }
-      
+
       callback();
     },
     flush(callback) {
-      // Write remaining chunk
+      // Flush any remaining buffered line (no trailing \n at EOF)
+      if (lineBuffer !== '') {
+        if (currentChunk !== '') currentChunk += '\n';
+        currentChunk += lineBuffer;
+        currentLineCount++;
+      }
       if (currentChunk !== '') {
         const fileName = `chunk_${chunkNumber}.txt`;
         const filePath = path.join(outDir, fileName);

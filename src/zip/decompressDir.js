@@ -22,7 +22,7 @@ const decompressDir = async () => {
   const brotli = createBrotliDecompress();
   const input = createReadStream(archivePath);
 
-  let buffer = '';
+  let buffer = Buffer.alloc(0);
   let firstLine = true;
   let fileCount = 0;
   let currentFileIndex = 0;
@@ -33,7 +33,7 @@ const decompressDir = async () => {
 
   const processStream = new Transform({
     transform(chunk, encoding, callback) {
-      buffer += chunk.toString();
+      buffer = Buffer.concat([buffer, chunk]);
       processBuffer();
       callback();
     },
@@ -52,10 +52,10 @@ const decompressDir = async () => {
 
   const processBuffer = () => {
     if (state === 'header' && firstLine) {
-      const newlineIdx = buffer.indexOf('\n');
+      const newlineIdx = buffer.indexOf(0x0A);
       if (newlineIdx !== -1) {
-        const headerStr = buffer.substring(0, newlineIdx);
-        buffer = buffer.substring(newlineIdx + 1);
+        const headerStr = buffer.subarray(0, newlineIdx).toString('utf-8');
+        buffer = buffer.subarray(newlineIdx + 1);
         const header = JSON.parse(headerStr);
         fileCount = header.count;
         currentFileIndex = 0;
@@ -65,10 +65,10 @@ const decompressDir = async () => {
       }
     } else if (state === 'metadata') {
       if (currentFileIndex < fileCount) {
-        const newlineIdx = buffer.indexOf('\n');
+        const newlineIdx = buffer.indexOf(0x0A);
         if (newlineIdx !== -1) {
-          const metadataStr = buffer.substring(0, newlineIdx);
-          buffer = buffer.substring(newlineIdx + 1);
+          const metadataStr = buffer.subarray(0, newlineIdx).toString('utf-8');
+          buffer = buffer.subarray(newlineIdx + 1);
           const metadata = JSON.parse(metadataStr);
           currentFilePath = metadata.path;
           currentFileSize = metadata.size;
@@ -80,9 +80,10 @@ const decompressDir = async () => {
     } else if (state === 'content') {
       if (currentFileData.length < currentFileSize) {
         const needed = currentFileSize - currentFileData.length;
-        const chunk = buffer.substring(0, needed);
-        currentFileData = Buffer.concat([currentFileData, Buffer.from(chunk)]);
-        buffer = buffer.substring(needed);
+        const take = Math.min(needed, buffer.length);
+        const contentChunk = buffer.subarray(0, take);
+        currentFileData = Buffer.concat([currentFileData, contentChunk]);
+        buffer = buffer.subarray(take);
 
         if (currentFileData.length === currentFileSize) {
           // File complete, write it
@@ -91,12 +92,12 @@ const decompressDir = async () => {
             fs.mkdirSync(dirPath, { recursive: true });
           }
           fs.writeFileSync(path.join(outDir, currentFilePath), currentFileData);
-          
-          // Skip the newline separator
-          if (buffer.length > 0 && buffer[0] === '\n') {
-            buffer = buffer.substring(1);
+
+          // Skip the newline separator (single byte)
+          if (buffer.length > 0 && buffer[0] === 0x0A) {
+            buffer = buffer.subarray(1);
           }
-          
+
           currentFileIndex++;
           state = 'metadata';
           processBuffer();

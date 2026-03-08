@@ -15,9 +15,12 @@ const execCommand = () => {
     shell: true
   });
   
-  // Exit with same code as child
-  child.on('exit', (code) => {
-    process.exit(code);
+  // Exit with same code as child (or 128 if killed by signal)
+  child.on('exit', (code, signal) => {
+    if (code !== null && code !== undefined) {
+      process.exit(code);
+    }
+    process.exit(signal ? 128 : 0);
   });
 };
 
