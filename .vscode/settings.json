@@ -1,0 +1,5 @@
+{
+  "terminal.integrated.env.osx": {
+    "NPM_CONFIG_DEVDIR": null
+  }
+}

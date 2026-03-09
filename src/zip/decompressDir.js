@@ -65,6 +65,10 @@ const decompressDir = async () => {
       }
     } else if (state === 'metadata') {
       if (currentFileIndex < fileCount) {
+        // Consume separator newline (may have arrived in next chunk)
+        while (buffer.length > 0 && buffer[0] === 0x0A) {
+          buffer = buffer.subarray(1);
+        }
         const newlineIdx = buffer.indexOf(0x0A);
         if (newlineIdx !== -1) {
           const metadataStr = buffer.subarray(0, newlineIdx).toString('utf-8');
@@ -78,6 +82,24 @@ const decompressDir = async () => {
         }
       }
     } else if (state === 'content') {
+      // Handle zero-length files: 0 < 0 is false, so we'd never enter the block below
+      if (currentFileSize === 0) {
+        const dirPath = path.dirname(path.join(outDir, currentFilePath));
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
+        fs.writeFileSync(path.join(outDir, currentFilePath), currentFileData);
+
+        if (buffer.length > 0 && buffer[0] === 0x0A) {
+          buffer = buffer.subarray(1);
+        }
+
+        currentFileIndex++;
+        state = 'metadata';
+        processBuffer();
+        return;
+      }
+
       if (currentFileData.length < currentFileSize) {
         const needed = currentFileSize - currentFileData.length;
         const take = Math.min(needed, buffer.length);

@@ -67,6 +67,15 @@ const split = async () => {
     flush(callback) {
       // Flush any remaining buffered line (no trailing \n at EOF)
       if (lineBuffer !== '') {
+        // If current chunk is already full, write it first so we don't exceed linesPerChunk
+        if (currentLineCount > 0 && currentLineCount % linesPerChunk === 0) {
+          const fileName = `chunk_${chunkNumber}.txt`;
+          const filePath = path.join(outDir, fileName);
+          fs.writeFileSync(filePath, currentChunk);
+          chunkNumber++;
+          currentChunk = '';
+          currentLineCount = 0;
+        }
         if (currentChunk !== '') currentChunk += '\n';
         currentChunk += lineBuffer;
         currentLineCount++;
